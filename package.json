@@ -1,0 +1,15 @@
+{
+  "name": "html-css-js",
+  "version": "1.0.0",
+  "description": "A template for HTML, CSS and Javascript",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve"
+  },
+  "keywords": ["html", "css", "js"],
+  "author": "Ives van Hoorne",
+  "license": "MIT",
+  "devDependencies": {
+    "serve": "11.2.0"
+  }
+}
