@@ -1,566 +1,91 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+
+<head>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
 
     <title>Online - Single-Day Task Report</title>
-    <link rel="stylesheet" href="styles.css" />
-    <script
-      type="text/javascript"
-      language="javascript"
-      src="https://code.jquery.com/jquery-3.7.0.js"
-    ></script>
-    <script
-      type="text/javascript"
-      language="javascript"
-      src="https://cdnjs.cloudflare.com/ajax/libs/store.js/2.0.12/store.modern.min.js"
-    ></script>
 
-    <script type="text/javascript">
-      let isDST;
-      let checkbox;
+    <link rel="stylesheet" href="style.css">
+    
+    <script type="text/javascript" language="javascript"
+    src="https://cdnjs.cloudflare.com/ajax/libs/store.js/2.0.12/store.modern.min.js"></script>
+    <script type="text/javascript" language="javascript" src="https://code.jquery.com/jquery-3.7.0.js"></script>
+    <script type="text/javascript" language="javascript" src="scripts.js"></script>
 
-      $(document).ready(function () {
-        checkbox = document.getElementById("dstCheck");
-        isDST = checkbox.checked;
+</head>
 
-        let nytCurrentTime = document.getElementById("nytCurrentTime");
+<body>
 
-        let newYorkTime = new Date();
-        newYorkTime.setHours(newYorkTime.getHours() - 5); // New York Standard Time
-        nytCurrentTime.innerHTML =
-          "<b>" +
-          newYorkTime.toLocaleString("en-US", {
-            hour: "numeric",
-            minute: "numeric",
-            hour12: true,
-            timeZone: "UTC"
-          }) +
-          "</b>";
-
-        checkbox.addEventListener("change", function () {
-          isDST = checkbox.checked;
-          newYorkTime = new Date();
-          newYorkTime.setHours(newYorkTime.getHours() - (isDST ? 4 : 5));
-          nytCurrentTime.innerHTML =
-            "<b>" +
-            newYorkTime.toLocaleString("en-US", {
-              hour: "numeric",
-              minute: "numeric",
-              hour12: true,
-              timeZone: "UTC"
-            }) +
-            "</b>";
-        });
-      });
-
-      async function createReport() {
-        let inputDateStart = document.getElementById("datePickerStart").value;
-        let inputDateEnd = document.getElementById("datePickerEnd").value;
-        let taskID = document.getElementById("taskId").value;
-        let taskLinesBooty = document.getElementById("taskLinesBooty").value;
-
-        let submitButton = document.getElementById("submitButton");
-        let fAllButton = document.getElementById("flushAllButton");
-        let fCurrentButton = document.getElementById("flushCurrentButton");
-
-        let loader = document.getElementById("loader");
-        let loaderText = document.getElementById("loaderText");
-
-        if (taskID.length == 0) {
-          alert("Please provide a Task ID to create the report.");
-        } else if (inputDateStart.length == 0 || inputDateEnd.length == 0) {
-          alert("Please select the starting and ending day.");
-        } else {
-          submitButton.disabled = true;
-          checkbox.disabled = true;
-
-          let table = document.getElementById("reportTable");
-          table.innerHTML = "";
-
-          document.getElementById("taskName").hidden = true;
-          document.getElementById("taskName").innerHTML = "";
-          fAllButton.hidden = true;
-          fCurrentButton.hidden = true;
-
-          loader.hidden = false;
-          loaderText.innerHTML =
-            "Checking for new completed tasks in <b>WFM</b>...";
-          loaderText.hidden = false;
-
-          let urlAJAX = "https://api.writeforme.org/api/v1/getSolutions";
-          let limitSetting = 25;
-          let listTypeSetting = "taskSolutions";
-          let querySetting = "";
-          let skipSetting = 0;
-          let sortAscSetting = false;
-          let sortBySetting = "created";
-          let taskSetting = taskID;
-
-          let records = 0;
-
-          let totalRecords = 0;
-
-          let taskIdData;
-          let taskNameData;
-
-          let recordFound = false;
-
-          let wfmResponseOk = true;
-
-          let typistDateFiltered = new Array();
-
-          let reportDateStart = new Date(inputDateStart);
-          let reportDateEnd = new Date(inputDateEnd);
-
-          // New York Time timezone adjustment + 3HRS Heaven
-
-          reportDateStart.setHours(
-            reportDateStart.getHours() + (isDST ? 6 : 7)
-          ); // Adds 6 or 7 hrs
-          reportDateStart.setMinutes(reportDateStart.getMinutes() + 59); // Adds 59 minutes
-          reportDateStart.setSeconds(reportDateStart.getSeconds() + 59); // Adds 59 seconds
-
-          // One day range with New York Time timezone adjustment + 3HRS Heaven
-
-          reportDateEnd.setDate(reportDateEnd.getDate() + 1); // Adds 1 day
-          reportDateEnd.setHours(reportDateEnd.getHours() + (isDST ? 7 : 8)); // Adds 7 or 8 hrs
-
-          function retrieveDataWFM() {
-            return new Promise(function (resolve, reject) {
-              $.ajax({
-                type: "POST",
-                url: urlAJAX,
-                contentType: "application/json",
-                data: JSON.stringify({
-                  limit: limitSetting,
-                  listType: listTypeSetting,
-                  query: querySetting,
-                  skip: skipSetting,
-                  sortAsc: sortAscSetting,
-                  sortBy: sortBySetting,
-                  task: taskSetting
-                }),
-                success: function (data) {
-                  totalRecords = data.totalCount;
-
-                  taskIdData = data.solutions[0].task._id;
-                  taskNameData = data.solutions[0].task.name;
-
-                  if (store.get(taskIdData) === undefined) {
-                    store.set(taskIdData, { name: taskNameData, type: "task" });
-                  }
-
-                  for (let index = 0; index < data.solutions.length; index++) {
-                    const element = data.solutions[index];
-
-                    if (store.get(element._id) === undefined) {
-                      store.set(element._id, element);
-                    } else {
-                      continueApiRequests = false;
-                      break;
-                    }
-                  }
-
-                  records += limitSetting;
-                  skipSetting += 25;
-
-                  loaderText.innerHTML =
-                    "Downloading " +
-                    records +
-                    " of " +
-                    totalRecords +
-                    " available completions...";
-
-                  if (continueApiRequests) {
-                    setTimeout(resolve, 5000); // 3 second cooldown before a new request to WFM is sent
-                  } else {
-                    resolve();
-                  }
-                },
-                error: function (request, status, error) {
-                  wfmResponseOk = false;
-                  alert("WFM Response Error:\n" + request.responseText);
-                  reject();
-                }
-              });
-            });
-          }
-
-          let noWfmError = true;
-
-          let continueApiRequests = true;
-
-          while (records <= totalRecords && continueApiRequests && noWfmError) {
-            await retrieveDataWFM().catch(() => (noWfmError = false));
-          }
-
-          loader.hidden = true;
-          loaderText.innerHTML = "Done.";
-          loaderText.hidden = true;
-
-          if (wfmResponseOk) {
-            store.each(function (value, key) {
-              if (value.hasOwnProperty("created")) {
-                let userDate = new Date(value.created);
-
-                if (
-                  value.task._id === taskID &&
-                  userDate.getTime() > reportDateStart.getTime() &&
-                  userDate.getTime() < reportDateEnd.getTime()
-                ) {
-                  typistDateFiltered.push({
-                    name:
-                      value.userName === " "
-                        ? value.realUser.name
-                        : value.userName,
-                    userId:
-                      value.realUser != null
-                        ? value.realUser._id
-                        : "DELETED USER",
-                    photo:
-                      value.realUser != null
-                        ? value.realUser.lowPhoto
-                        : undefined,
-                    time: value.totalTime,
-                    mistakes: value.mistakes,
-                    date: value.created
-                  });
-                }
-              }
-            });
-
-            typistDateFiltered.sort(function (a, b) {
-              let dateA = new Date(a.date);
-              let dateB = new Date(b.date);
-              return dateB.getTime() - dateA.getTime();
-            });
-
-            let groupedData = typistDateFiltered.reduce((previous, current) => {
-              if (previous.hasOwnProperty(current.name)) {
-                previous[current.name].count++;
-                previous[current.name].time =
-                  previous[current.name].time + current.time;
-                previous[current.name].mistakes =
-                  previous[current.name].mistakes + current.mistakes;
-              } else {
-                previous[current.name] = {
-                  name: current.name,
-                  userId: current.userId,
-                  photo: current.photo,
-                  time: current.time,
-                  mistakes: current.mistakes,
-                  count: 1
-                };
-              }
-
-              return previous;
-            }, {});
-
-            let typistsNames = Object.keys(groupedData);
-
-            let totalTaskCount = 0;
-            let totalTimeCount = 0;
-            let totalMistakeCount = 0;
-
-            typistsNames.forEach(function (element) {
-              totalTaskCount = totalTaskCount + groupedData[element].count;
-              totalTimeCount = totalTimeCount + groupedData[element].time;
-              totalMistakeCount =
-                totalMistakeCount + groupedData[element].mistakes;
-            });
-
-            function padTo2Digits(num) {
-              return num.toString().padStart(2, "0");
-            }
-
-            function convertMsToTime(milliseconds) {
-              let seconds = Math.floor(milliseconds / 1000);
-              let minutes = Math.floor(seconds / 60);
-              let hours = Math.floor(minutes / 60);
-
-              seconds = seconds % 60;
-              minutes = minutes % 60;
-
-              return (
-                padTo2Digits(hours) +
-                ":" +
-                padTo2Digits(minutes) +
-                ":" +
-                padTo2Digits(seconds)
-              );
-            }
-
-            let header = table.createTHead();
-
-            let headerRow = header.insertRow();
-
-            let headerTitle1 = headerRow.insertCell(0);
-            let headerTitle2 = headerRow.insertCell(1);
-            let headerTitle3 = headerRow.insertCell(2);
-            let headerTitle4 = headerRow.insertCell(3);
-            let headerTitle5 = headerRow.insertCell(4);
-            let headerTitle6 = headerRow.insertCell(5);
-            let headerTitle7;
-            if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-              headerTitle7 = headerRow.insertCell(6);
-            }
-
-            if (typistDateFiltered.length != 0) {
-              document.getElementById("taskName").innerHTML =
-                "<h2><a href='https://writeforme.org/task/" +
-                taskIdData +
-                "' target='_blank'>" +
-                taskNameData +
-                "</a></h2>";
-              document.getElementById("taskName").hidden = false;
-              fAllButton.hidden = false;
-              fCurrentButton.hidden = false;
-
-              headerTitle1.innerHTML = "<b>WFM USER ID</b>";
-              headerTitle2.innerHTML = "<b>USER</b>";
-              headerTitle3.innerHTML = "<b>NAME</b>";
-              headerTitle4.innerHTML = "<b>COUNT</b>";
-              headerTitle5.innerHTML = "<b>MISTAKES</b>";
-              headerTitle6.innerHTML = "<b>H:M:S</b>";
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                headerTitle7.innerHTML = "<b>LINES/🍑</b>";
-              }
-            } else {
-              headerTitle1.innerHTML = "<";
-              headerTitle2.innerHTML = "📝";
-              headerTitle3.innerHTML = "-";
-              headerTitle4.innerHTML =
-                "<b>NO COMPLETIONS FOUND ON SELECTED DAY</b>";
-              headerTitle5.innerHTML = "-";
-              headerTitle6.innerHTML = ">";
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                headerTitle7.innerHTML = ">";
-              }
-            }
-
-            let row;
-
-            typistsNames.forEach(function (element) {
-              row = table.insertRow();
-
-              let cell1 = row.insertCell(0);
-              let cell2 = row.insertCell(1);
-              let cell3 = row.insertCell(2);
-              let cell4 = row.insertCell(3);
-              let cell5 = row.insertCell(4);
-              let cell6 = row.insertCell(5);
-              let cell7;
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                cell7 = row.insertCell(6);
-              }
-
-              cell1.innerHTML = groupedData[element].userId;
-              cell2.innerHTML =
-                groupedData[element].photo == undefined ||
-                groupedData[element].photo.length === 0
-                  ? "<a href='https://writeforme.org/profile/" +
-                    (groupedData[element].userId == "DELETED USER"
-                      ? ""
-                      : groupedData[element].userId) +
-                    "' target='_blank'>No Photo</a>"
-                  : "<a href='https://writeforme.org/profile/" +
-                    groupedData[element].userId +
-                    "' target='_blank'><img src='data:image/jpeg;base64," +
-                    groupedData[element].photo +
-                    "'></a>";
-              cell3.innerHTML =
-                "<a href='https://writeforme.org/profile/" +
-                (groupedData[element].userId == "DELETED USER"
-                  ? ""
-                  : groupedData[element].userId) +
-                "' target='_blank'>" +
-                groupedData[element].name +
-                "</a>";
-              cell4.innerHTML = "<b>" + groupedData[element].count + "</b>";
-              cell5.innerHTML = new Intl.NumberFormat().format(
-                groupedData[element].mistakes
-              );
-              cell6.innerHTML = convertMsToTime(groupedData[element].time);
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                cell7.innerHTML =
-                  "<b>" +
-                  new Intl.NumberFormat().format(
-                    groupedData[element].count * taskLinesBooty
-                  ) +
-                  "</b>";
-              }
-
-              cell4.style = "color: white;";
-
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                cell7.style = "color: white;";
-              }
-            });
-
-            if (typistDateFiltered.length != 0) {
-              row = table.insertRow();
-
-              let cell5 = row.insertCell(0);
-              let cell6 = row.insertCell(1);
-              let cell7 = row.insertCell(2);
-              let cell8 = row.insertCell(3);
-              let cell9 = row.insertCell(4);
-              let cell10 = row.insertCell(5);
-              let cell11;
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                cell11 = row.insertCell(6);
-              }
-
-              cell5.innerHTML = "<b>TASK ARCHIVE:</b>";
-              cell6.innerHTML =
-                "<b>" + new Intl.NumberFormat().format(totalRecords) + "</b>";
-              cell7.innerHTML = "<b>TOTALS:</b>";
-              cell8.innerHTML =
-                "<b>" + new Intl.NumberFormat().format(totalTaskCount) + "</b>";
-              cell9.innerHTML =
-                "<b>" +
-                new Intl.NumberFormat().format(totalMistakeCount) +
-                "</b>";
-              cell10.innerHTML =
-                "<b>" + convertMsToTime(totalTimeCount) + "</b>";
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                cell11.innerHTML =
-                  "<b>" +
-                  new Intl.NumberFormat().format(
-                    totalTaskCount * taskLinesBooty
-                  ) +
-                  "</b>";
-              }
-
-              cell5.style = "background-color: #2a2a2a;";
-              cell6.style = "background-color: #2a2a2a;";
-              cell7.style =
-                "color: white; font-size: 15px; font-weight: bold; background-color: #2a2a2a;";
-              cell8.style =
-                "color: white; font-size: 25px; font-weight: 500; background-color: #2a2a2a;";
-              cell9.style = "background-color: #2a2a2a;";
-              cell10.style = "background-color: #2a2a2a;";
-              if (taskLinesBooty.length != 0 && taskLinesBooty != 0) {
-                cell11.style =
-                  "color: white; font-size: 25px; font-weight: 500; background-color: #2a2a2a;";
-              }
-            }
-          }
-
-          setTimeout(() => (submitButton.disabled = false), 5000);
-          checkbox.disabled = false;
-        }
-      }
-
-      function flushAllTasks() {
-        store.clearAll();
-      }
-
-      function flushCurrentTasks() {
-        let deleteTaskID = document.getElementById("taskId").value;
-        store.remove(deleteTaskID);
-        store.each(function (value, key) {
-          if (value.hasOwnProperty("created")) {
-            if (value.task._id === deleteTaskID) {
-              store.remove(key);
-            }
-          }
-        });
-      }
-    </script>
-  </head>
-
-  <body>
     <h1>Task Counter</h1>
-    <b>Online</b> Edition<br />
-    Ver. 1.0<br /><br />
+    <b>Online</b> Edition<br>
+    Ver. 2.0<br><br>
 
     <section>
-      <ul>
-        <li>
-          <h3>New York Time</h3>
-          <p id="nytCurrentTime">
-            -- : --
-          </p>
-        </li>
-        <li>
-          <h3>DST</h3>
-          <p>
-            <input type="checkbox" id="dstCheck" />
-          </p>
-        </li>
-        <li>
-          <h3>Starting Day</h3>
-          <p>
-            <input type="date" id="datePickerStart" />
-          </p>
-        </li>
-        <li>
-          <h3>Ending Day</h3>
-          <p>
-            <input type="date" id="datePickerEnd" />
-          </p>
-        </li>
-        <li>
-          <h3>WFM Task ID</h3>
-          <p>
-            <input type="text" id="taskId" size="30" />
-          </p>
-        </li>
-        <li>
-          <h3>Lines/Booty</h3>
-          <p>
-            <input
-              type="number"
-              id="taskLinesBooty"
-              size="10"
-              min="0"
-              value="0"
-            />
-          </p>
-        </li>
-        <li>
-          <button id="submitButton" onclick="createReport()" :hover>
-            Submit
-          </button>
-        </li>
-      </ul>
+        <ul>
+            <li>
+                <h3>New York Time</h3>
+                <p id="nytCurrentTime">
+                    -- : --
+                </p>
+            </li>
+            <li>
+                <h3>DST</h3>
+                <p>
+                    <input type="checkbox" id="dstCheck" />
+                </p>
+            </li>
+            <li>
+                <h3>Starting Day</h3>
+                <p>
+                    <input type="date" id="datePickerStart" />
+                </p>
+            </li>
+            <li>
+                <h3>Ending Day</h3>
+                <p>
+                    <input type="date" id="datePickerEnd" />
+                </p>
+            </li>
+            <li>
+                <h3>WFM Task ID</h3>
+                <p>
+                    <input type="text" id="taskId" size="30" />
+                </p>
+            </li>
+            <li>
+                <h3>Lines/Booty</h3>
+                <p>
+                    <input type="number" id="taskLinesBooty" size="10" min="0" value="0" />
+                </p>
+            </li>
+            <li>
+                <button id="submitButton" onclick="createReport()" :hover>Submit</button>
+            </li>
+        </ul>
     </section>
-    <br />
-    <section id="taskName" hidden></section>
-    <br />
-    <table class="center" id="reportTable"></table>
-    <br />
+    <br>
+    <section id="taskName" hidden>
+    </section>
+    <br>
+    <table class="center" id="reportTable">
+    </table>
+    <br>
     <center>
-      <div id="loaderText" class="loaderText" hidden></div>
-      <div id="loader" class="loader" hidden></div>
+        <div id="loaderText" class="loaderText" hidden></div>
+        <div id="loader" class="loader" hidden></div>
     </center>
-    <br />
-    <br />
-    <br />
+    <br>
+    <br>
+    <br>
     <section>
-      <h3>Heaven's Slavery System © 2023</h3>
+        <h3>Heaven's Slavery System © 2023</h3>
     </section>
     <center>
-      <button
-        id="flushCurrentButton"
-        class="clear"
-        onclick="flushCurrentTasks()"
-        :hover
-        hidden
-      >
-        Clear Current Task Cache
-      </button>
-      <button
-        id="flushAllButton"
-        class="clear"
-        onclick="flushAllTasks()"
-        :hover
-        hidden
-      >
-        Clear ALL Cache
-      </button>
+        <button id="flushCurrentButton" class="clear" onclick="flushCurrentTasks()" :hover hidden>Clear Current Task
+            Cache</button>
+        <button id="flushAllButton" class="clear" onclick="flushAllTasks()" :hover hidden>Clear ALL Cache</button>
     </center>
-  </body>
+</body>
+
 </html>
